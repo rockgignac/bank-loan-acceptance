@@ -1,0 +1,180 @@
+---
+title: "Universal Bank kNN Model Analysis"
+author: "Rock Gignac"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    theme: flatly
+    highlight: tango
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+# Hide setup code in HTML output
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(caret)
+```
+
+# Load Data
+```{r}
+bank <- read.csv("UniversalBank.csv")
+names(bank)
+head(bank, 10)
+str(bank)
+```
+
+## Clean Up
+```{r}
+bank <- bank[, -c(1, 5)]
+names(bank)
+
+bank <- bank[, c(1:7, 9:12, 8)]
+head(bank)
+
+bank$Education <- as.factor(bank$Education)
+
+bank$Securities.Account <- as.factor(bank$Securities.Account)
+
+bank$CD.Account <- as.factor(bank$CD.Account)
+
+bank$Online <- as.factor(bank$Online)
+
+bank$CreditCard <- as.factor(bank$CreditCard)
+
+bank$Personal.Loan <- factor(bank$Personal.Loan,
+levels = c("0", "1"),
+labels = c("No", "Yes"))
+
+table(bank$Personal.Loan)
+```
+```{r}
+## Training and Validation Sets
+
+set.seed(666)
+
+train_index <- sample(1:nrow(bank), 0.6 * nrow(bank))
+valid_index <- setdiff(1:nrow(bank), train_index)
+
+train <- bank[train_index, ]
+valid <- bank[valid_index, ]
+
+nrow(train)
+nrow(valid)
+```
+# Define New Customer
+```{r}
+new_cust <- data.frame(
+Age = 40,
+Experience = 10,
+Income = 84,
+Family = 2,
+CCAvg = 2,
+Education = 2,
+Mortgage = 0,
+Securities.Account = 0,
+CD.Account = 0,
+Online = 1,
+CreditCard = 1
+)
+
+new_cust$Education <- as.factor(new_cust$Education)
+
+new_cust$Securities.Account <- as.factor(new_cust$Securities.Account)
+
+new_cust$CD.Account <- as.factor(new_cust$CD.Account)
+
+new_cust$Online <- as.factor(new_cust$Online)
+
+new_cust$CreditCard <- as.factor(new_cust$CreditCard)
+
+new_cust
+```
+# Prepare for kNN
+```{r}
+norm_values <- preProcess(train[, -c(6, 8:12)], method = c("center", "scale"))
+
+train_norm <- train
+valid_norm <- valid
+
+train_norm[, -c(6, 8:12)] <- predict(norm_values, train[, -c(6, 8:12)])
+valid_norm[, -c(6, 8:12)] <- predict(norm_values, valid[, -c(6, 8:12)])
+
+new_cust_norm <- predict(norm_values, new_cust)
+
+head(train_norm)
+head(valid_norm)
+```
+# Train kNN Models
+
+## k = 3
+```{r}
+knn_model_k3 <- caret::knn3(Personal.Loan ~ ., data = train_norm, k = 3)
+
+knn_pred_k3_train <- predict(knn_model_k3, newdata = train_norm[, -c(12)], type = "class")
+
+confusionMatrix(knn_pred_k3_train, as.factor(train_norm[, 12]), positive = "Yes")
+```
+## k = 5
+```{r}
+
+knn_model_k5 <- caret::knn3(Personal.Loan ~ ., data = train_norm, k = 5)
+
+knn_pred_k5_train <- predict(knn_model_k5, newdata = train_norm[, -c(12)], type = "class")
+
+confusionMatrix(knn_pred_k5_train, as.factor(train_norm[, 12]), positive = "Yes")
+```
+## k = 7
+```{r}
+knn_model_k7 <- caret::knn3(Personal.Loan ~ ., data = train_norm, k = 7)
+
+knn_pred_k7_train <- predict(knn_model_k7, newdata = train_norm[, -c(12)], type = "class")
+
+confusionMatrix(knn_pred_k7_train, as.factor(train_norm[, 12]), positive = "Yes")
+```
+# Validate Models
+```{r}
+library(ROSE)
+```
+## k = 3
+```{r}
+knn_pred_k3_valid <- predict(knn_model_k3, newdata = valid_norm[, -c(12)], type = "class")
+
+confusionMatrix(knn_pred_k3_valid, as.factor(valid_norm[, 12]), positive = "Yes")
+
+ROSE::roc.curve(valid_norm$Personal.Loan, knn_pred_k3_valid)
+```
+## k = 5
+```{r}
+knn_pred_k5_valid <- predict(knn_model_k5, newdata = valid_norm[, -c(12)], type = "class")
+
+confusionMatrix(knn_pred_k5_valid, as.factor(valid_norm[, 12]), positive = "Yes")
+
+ROSE::roc.curve(valid_norm$Personal.Loan, knn_pred_k5_valid)
+```
+## k = 7
+```{r}
+knn_pred_k7_valid <- predict(knn_model_k7, newdata = valid_norm[, -c(12)], type = "class")
+
+confusionMatrix(knn_pred_k7_valid, as.factor(valid_norm[, 12]), positive = "Yes")
+
+ROSE::roc.curve(valid_norm$Personal.Loan, knn_pred_k7_valid)
+```
+# Predict for New Customer
+```{r}
+new_cust_predict1 <- predict(knn_model_k3, newdata = new_cust_norm, type = "class")
+
+new_cust_predict2 <- predict(knn_model_k5, newdata = new_cust_norm, type = "class")
+
+new_cust_predict3 <- predict(knn_model_k7, newdata = new_cust_norm, type = "class")
+
+new_cust_predict1
+
+new_cust_predict2
+
+new_cust_predict3
+```
+# Conclusion
+
+Based on model predictions, this customer is unlikely to accept the loan offer.
